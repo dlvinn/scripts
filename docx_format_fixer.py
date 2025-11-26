@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Arabic Word Document Format Fixer
-Fixes RTL, alignment, and formatting issues in Arabic .docx files
+Arabic Document Format Fixer
+Fixes RTL, alignment, and formatting issues in Arabic .docx and .odt files
+Supports both Microsoft Word (DOCX) and OpenDocument (ODF/ODT) formats
 """
 
 import os
@@ -17,6 +18,8 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from xml.etree import ElementTree as ET
 import argparse
+from encoding_fixer import ArabicEncodingFixer
+from odf_handler import ODFHandler
 
 
 class ArabicDocxFixer:
@@ -25,13 +28,16 @@ class ArabicDocxFixer:
     # Arabic fonts to use (in order of preference)
     ARABIC_FONTS = ['Arial', 'Traditional Arabic', 'Simplified Arabic']
 
-    def __init__(self, folder_path, dry_run=False):
+    def __init__(self, folder_path, dry_run=False, fix_encoding=True):
         """Initialize the fixer with a folder path"""
         self.folder_path = Path(folder_path)
         self.fixed_count = 0
         self.error_count = 0
         self.fixes_applied = {}
         self.dry_run = dry_run
+        self.fix_encoding = fix_encoding
+        self.encoding_fixer = ArabicEncodingFixer() if fix_encoding else None
+        self.odf_handler = ODFHandler(fix_encoding=fix_encoding)
 
     def is_arabic_text(self, text):
         """Check if text contains Arabic characters"""
@@ -62,28 +68,50 @@ class ArabicDocxFixer:
             rtl.set(qn('w:val'), '1')
             rPr.append(rtl)
 
+    def fix_text_encoding_in_paragraph(self, paragraph, doc_fixes):
+        """Fix Mojibake encoding issues in paragraph text"""
+        if not paragraph.runs:
+            return
+
+        encoding_fixed = False
+
+        for run in paragraph.runs:
+            if run.text:
+                original_text = run.text
+                fixed_text = self.encoding_fixer.clean_text(original_text)
+
+                if fixed_text != original_text:
+                    run.text = fixed_text
+                    encoding_fixed = True
+
+        if encoding_fixed:
+            doc_fixes['encoding'] += 1
+
     def fix_numbered_headers(self, paragraph):
-        """Fix manually numbered headers like 'المجال .2' to proper RTL format"""
+        """Fix manually numbered headers - handles multiple patterns"""
         import re
 
         text = paragraph.text.strip()
 
-        # Pattern to match Arabic text followed by space and number with dot
-        # Examples: "المجال .2", "الغرض .1", "خطوات الإجراء .5"
-        pattern = r'^(.+?)\s+\.(\d+(?:\.\d+)*)$'
-        match = re.match(pattern, text)
+        # Pattern 1: "النطاق.2" → "2. النطاق" (NO SPACE before dot)
+        pattern1 = r'^(.+?)\.(\d+(?:\.\d+)*)$'
+
+        # Pattern 2: "المجال .2" → "2. المجال" (WITH SPACE before dot)
+        pattern2 = r'^(.+?)\s+\.(\d+(?:\.\d+)*)$'
+
+        match = re.match(pattern1, text) or re.match(pattern2, text)
 
         if match:
             arabic_text = match.group(1).strip()
             number = match.group(2).strip()
 
-            # Reconstruct with RLM (Right-to-Left Mark) to force RTL rendering
-            # RLM = \u200F (invisible character that forces RTL)
-            RLM = '\u200F'
+            # Check if text is actually Arabic (not just a file name or URL)
+            if not self.is_arabic_text(arabic_text):
+                return False
 
-            # Build: Arabic text + number with dot at the beginning
-            # The RLM ensures proper RTL rendering
-            new_text = f"{arabic_text} {number}."
+            # Reconstruct in proper RTL format: "2. النطاق"
+            # Number first, then dot, then space, then Arabic text
+            new_text = f"{number}. {arabic_text}"
 
             # Preserve formatting by getting the first run's properties
             if paragraph.runs:
@@ -116,6 +144,10 @@ class ArabicDocxFixer:
         """Fix paragraph alignment and RTL direction - NO font changes"""
         if not paragraph.text.strip():
             return
+
+        # Fix encoding issues FIRST (before any other processing)
+        if self.fix_encoding and self.encoding_fixer:
+            self.fix_text_encoding_in_paragraph(paragraph, doc_fixes)
 
         is_arabic = self.is_arabic_text(paragraph.text)
 
@@ -302,8 +334,37 @@ class ArabicDocxFixer:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
 
+    def fix_odf_document(self, doc_path):
+        """Fix a single ODF document (.odt)"""
+        try:
+            output_path = doc_path.parent / f"{doc_path.stem}_fixed{doc_path.suffix}"
+
+            if self.dry_run:
+                print(f"\n[DRY RUN] Would process ODF: {doc_path.name}")
+                return True
+
+            # Use ODF handler
+            doc_fixes = self.odf_handler.fix_document(doc_path, output_path)
+
+            self.fixed_count += 1
+            self.fixes_applied[doc_path.name] = doc_fixes
+
+            return True
+
+        except Exception as e:
+            print(f"✗ Error processing ODF {doc_path.name}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.error_count += 1
+            return False
+
     def fix_document(self, doc_path):
         """Fix a single document and return statistics"""
+        # Check file type and route to appropriate handler
+        if doc_path.suffix.lower() == '.odt':
+            return self.fix_odf_document(doc_path)
+
+        # DOCX handling below
         try:
             print(f"\nProcessing: {doc_path.name}")
             doc = Document(doc_path)
@@ -320,7 +381,8 @@ class ArabicDocxFixer:
                 'alignments': 0,
                 'fonts': 0,
                 'table_cells': 0,
-                'bullets': 0
+                'bullets': 0,
+                'encoding': 0
             }
 
             # Fix paragraphs
@@ -368,6 +430,7 @@ class ArabicDocxFixer:
             print(f"  - Fonts: {doc_fixes['fonts']}")
             print(f"  - Table cells: {doc_fixes['table_cells']}")
             print(f"  - Bullets: {doc_fixes['bullets']}")
+            print(f"  - Encoding fixes: {doc_fixes['encoding']}")
 
             if content_preserved:
                 print(f"  ✓ Content validation: PASSED")
@@ -387,7 +450,7 @@ class ArabicDocxFixer:
             return False
 
     def process_folder(self, recursive=True):
-        """Process all .docx files in the folder and optionally in subfolders"""
+        """Process all .docx and .odt files in the folder and optionally in subfolders"""
         if not self.folder_path.exists():
             print(f"Error: Folder not found: {self.folder_path}")
             return
@@ -396,12 +459,16 @@ class ArabicDocxFixer:
             print(f"Error: Not a directory: {self.folder_path}")
             return
 
-        # Find all .docx files (recursively if enabled)
+        # Find all .docx and .odt files (recursively if enabled)
         if recursive:
             # Search in current folder and all subfolders
             docx_files = [
                 f for f in self.folder_path.rglob("*.docx")
                 if not f.name.startswith("~$") and "_fixed" not in f.name
+            ]
+            odt_files = [
+                f for f in self.folder_path.rglob("*.odt")
+                if not f.name.startswith(".~") and "_fixed" not in f.name
             ]
             print(f"\nSearching recursively in: {self.folder_path}")
         else:
@@ -410,21 +477,31 @@ class ArabicDocxFixer:
                 f for f in self.folder_path.glob("*.docx")
                 if not f.name.startswith("~$") and "_fixed" not in f.name
             ]
+            odt_files = [
+                f for f in self.folder_path.glob("*.odt")
+                if not f.name.startswith(".~") and "_fixed" not in f.name
+            ]
             print(f"\nSearching in: {self.folder_path}")
 
-        if not docx_files:
-            print(f"No .docx files found")
+        # Combine both file types
+        all_files = docx_files + odt_files
+
+        if not all_files:
+            print(f"No .docx or .odt files found")
             return
 
-        print(f"Found {len(docx_files)} document(s) to process")
+        print(f"Found {len(all_files)} document(s) to process:")
+        print(f"  - {len(docx_files)} .docx file(s)")
+        print(f"  - {len(odt_files)} .odt file(s)")
         print("=" * 60)
 
         # Process each document
-        for doc_path in docx_files:
+        for doc_path in all_files:
             # Show relative path for better clarity
             try:
                 rel_path = doc_path.relative_to(self.folder_path)
-                print(f"\n[{rel_path.parent}]")
+                if rel_path.parent != Path('.'):
+                    print(f"\n[{rel_path.parent}]")
             except:
                 pass
 
@@ -455,19 +532,23 @@ class ArabicDocxFixer:
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(
-        description='Fix Arabic formatting issues in Word documents',
+        description='Fix Arabic formatting issues in Word and OpenDocument files',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python docx_format_fixer.py /path/to/documents
   python docx_format_fixer.py "C:\\Users\\Documents\\Arabic Docs"
+
+Supported formats:
+  - Microsoft Word (.docx)
+  - OpenDocument Text (.odt)
         """
     )
 
     parser.add_argument(
         'folder_path',
         nargs='?',
-        help='Path to folder containing .docx files'
+        help='Path to folder containing .docx and .odt files'
     )
 
     parser.add_argument(
@@ -482,15 +563,21 @@ Examples:
         help='Do not search in subfolders (only process current folder)'
     )
 
+    parser.add_argument(
+        '--no-encoding-fix',
+        action='store_true',
+        help='Skip Mojibake encoding fixes (e.g., ÀB → آب)'
+    )
+
     args = parser.parse_args()
 
     # Get folder path from argument or user input
     if args.folder_path:
         folder_path = args.folder_path
     else:
-        print("Arabic Word Document Format Fixer")
+        print("Arabic Document Format Fixer (DOCX & ODF)")
         print("=" * 60)
-        folder_path = input("Enter the folder path containing .docx files: ").strip()
+        folder_path = input("Enter the folder path containing .docx/.odt files: ").strip()
 
         if not folder_path:
             print("Error: No folder path provided")
@@ -500,10 +587,16 @@ Examples:
     folder_path = folder_path.strip('"').strip("'")
 
     # Create fixer and process
-    fixer = ArabicDocxFixer(folder_path, dry_run=args.dry_run)
+    fix_encoding = not args.no_encoding_fix
+    fixer = ArabicDocxFixer(folder_path, dry_run=args.dry_run, fix_encoding=fix_encoding)
 
     if args.dry_run:
         print("\n*** DRY RUN MODE - No files will be modified ***\n")
+
+    if fix_encoding:
+        print("✓ Mojibake encoding fix enabled (ÀB → آب)")
+    else:
+        print("⚠ Encoding fix disabled")
 
     # Process with or without recursion
     recursive = not args.no_recursive

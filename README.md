@@ -1,11 +1,24 @@
-# Arabic Word Document Tools
+# Arabic Document Tools
 
-Two powerful Python tools for handling Arabic Word documents (.docx) with proper RTL (right-to-left) formattin
+Powerful Python tools for handling Arabic documents with proper RTL (right-to-left) formatting
 
 ## 📋 Tools Included
 
-1. **docx_format_fixer.py** - Fixes formatting issues in existing Arabic documents
+1. **docx_format_fixer.py** - Fixes formatting issues in existing Arabic documents (**.docx & .odt**)
 2. **docx_generator.py** - Generates professional Arabic documents from scratch
+3. **encoding_fixer.py** - Fixes Mojibake encoding issues (e.g., `ÂÈ` → `آب`)
+4. **discover_mojibake.py** - Scans documents to find encoding problems
+5. **odf_to_docx_converter.py** - Converts ODF (.odt) to Word (.docx) format
+6. **replace_with_fixed.py** - Replace originals with "_fixed" versions
+7. **keep_only_odf.py** - Delete all files except ODF files
+8. **add_date_to_footer.py** - Add date/text to ODF footers 🆕
+
+## 🎯 Supported Formats
+
+| Format | Extension | Description | Status |
+|--------|-----------|-------------|--------|
+| Microsoft Word | `.docx` | Word 2007+ | ✅ Full Support |
+| OpenDocument Text | `.odt` | LibreOffice/OpenOffice | ✅ Full Support |
 
 ---
 
@@ -27,7 +40,7 @@ Two powerful Python tools for handling Arabic Word documents (.docx) with proper
    Or install manually:
 
    ```bash
-   pip install python-docx Pillow arabic-reshaper python-bidi
+   pip install python-docx Pillow arabic-reshaper python-bidi odfpy
    ```
 
 ---
@@ -36,12 +49,14 @@ Two powerful Python tools for handling Arabic Word documents (.docx) with proper
 
 ### What It Fixes
 
+- ✅ **Encoding Issues** (Mojibake: `ÂÈ` → `آب`)
 - ✅ RTL (right-to-left) text direction for Arabic paragraphs
 - ✅ Bullet point formatting and spacing
 - ✅ Table cell alignment for Arabic content
 - ✅ Mixed English/Arabic text direction problems
 - ✅ Paragraph alignment (right-aligned for Arabic)
 - ✅ Font consistency (uses Arial for Arabic text)
+- ✅ **Works with both .docx and .odt files**
 
 ### Usage
 
@@ -94,9 +109,10 @@ Errors: 0
 ### Notes
 
 - Original files are **never modified**
-- Fixed versions are saved as `filename_fixed.docx`
-- Files starting with `~$` (temp files) are ignored
-- Already fixed files (`_fixed.docx`) are skipped
+- Fixed versions are saved as `filename_fixed.docx` or `filename_fixed.odt`
+- Files starting with `~$` or `.~` (temp files) are ignored
+- Already fixed files (`_fixed.docx` / `_fixed.odt`) are skipped
+- Both DOCX and ODT files are processed automatically
 
 ---
 
@@ -304,16 +320,22 @@ python docx_generator.py --logo qc_logo.png --company "قسم مراقبة ال�
 
 ### File Formats
 
-- **Input**: .docx files (Microsoft Word 2007+)
-- **Output**: .docx files (Microsoft Word 2007+)
+- **Input**: .docx files (Microsoft Word 2007+) and .odt files (OpenDocument)
+- **Output**: .docx files (Microsoft Word 2007+) and .odt files (OpenDocument)
 - **Images**: PNG, JPG, JPEG (for logos)
 
 ### Limitations
 
-- Only works with .docx format (not .doc)
-- Best results in Microsoft Word (may vary in other editors)
+- Only works with .docx and .odt formats (not legacy .doc)
+- Best results in Microsoft Word (DOCX) or LibreOffice (ODT)
 - Large images may need resizing before use
 - Complex document structures might need manual review
+
+### New Features
+
+- 🆕 **ODF Support**: Now processes .odt files (LibreOffice/OpenOffice)
+- 🆕 **Encoding Fix**: Automatically fixes Mojibake issues (e.g., `ÂÈ` → `آب`)
+- 🆕 **Discovery Tool**: Scan documents to find encoding problems before fixing
 
 ---
 
