@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python encoding_fixer.py:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(dir /s /b *.odt)",
+      "Bash(cmd /c \"dir /s /b *.odt 2>nul\")",
+      "Bash(cmd /c \"if exist \"C:Program FilesLibreOfficeprogramsoffice.exe\" (echo LibreOffice found) else (echo LibreOffice NOT found at this path)\")",
+      "Bash(where soffice.exe)",
+      "Bash(cmd /c dir \"C:\\Program Files\\LibreOffice\")",
+      "Bash(where:*)",
+      "Bash(cmd /c \"dir /s /b \"C:Program FilesWPS Office*wps.exe\" 2>nul\")",
+      "Bash(cscript //nologo \"check_wps.vbs\")",
+      "Bash(cscript //nologo \"check_all_office.vbs\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
