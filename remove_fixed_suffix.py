@@ -158,64 +158,71 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Single file - preview
-  python remove_fixed_suffix.py --file "document_fixed.odt" --dry-run
+  # Process a folder directly (recommended)
+  python remove_fixed_suffix.py "C:\\Documents"
 
-  # Single file - actually rename
-  python remove_fixed_suffix.py --file "document_fixed.odt"
+  # Process a folder with --dry-run
+  python remove_fixed_suffix.py "C:\\Documents" --dry-run
 
-  # Folder - preview
-  python remove_fixed_suffix.py --folder "C:\\Documents" --dry-run
-
-  # Folder - actually rename
+  # Legacy support for --folder
   python remove_fixed_suffix.py --folder "C:\\Documents"
+
+  # Process a single file
+  python remove_fixed_suffix.py --file "document_fixed.odt"
 
 What it does:
   report_fixed.odt  →  report.odt
   invoice_fixed.docx  →  invoice.docx
-  data_fixed.txt  →  data.txt
-
-Note: Does NOT delete anything, just renames files
         """
     )
 
     parser.add_argument(
+        'path',
+        nargs='?',
+        default=None,
+        help='Path to a folder to process.'
+    )
+
+    parser.add_argument(
         '--file',
-        help='Path to single file to rename'
+        help='Path to single file to rename (optional)'
     )
 
     parser.add_argument(
         '--folder',
-        help='Path to folder containing files to rename'
+        help='Path to folder containing files to rename (optional, superseded by positional path)'
     )
 
     parser.add_argument(
         '--dry-run',
         action='store_true',
-        help='Preview changes without renaming (RECOMMENDED)'
+        help='Preview changes without renaming'
     )
 
     parser.add_argument(
         '--no-recursive',
         action='store_true',
-        help='Do not search subfolders (only for --folder mode)'
+        help='Do not search subfolders'
     )
 
     args = parser.parse_args()
 
-    if args.file:
+    # Determine the folder path to use
+    folder_to_process = args.path if args.path else args.folder
+
+    if folder_to_process:
+        # Folder mode
+        folder_path = folder_to_process.strip('"').strip("'")
+        recursive = not args.no_recursive
+        remove_fixed_suffix_batch(folder_path, recursive=recursive, dry_run=args.dry_run)
+
+    elif args.file:
         # Single file mode
         file_path = args.file.strip('"').strip("'")
         remove_fixed_suffix(file_path, dry_run=args.dry_run)
 
-    elif args.folder:
-        # Folder mode
-        folder_path = args.folder.strip('"').strip("'")
-        recursive = not args.no_recursive
-        remove_fixed_suffix_batch(folder_path, recursive=recursive, dry_run=args.dry_run)
-
     else:
-        # Interactive mode
+        # Interactive mode if no paths are provided
         print("Remove '_fixed' Suffix from Filenames")
         print("=" * 60)
         print("1. Remove from single file")

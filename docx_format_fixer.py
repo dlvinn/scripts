@@ -266,73 +266,7 @@ class ArabicDocxFixer:
             'table_cells_count': table_cells_count
         }
 
-    def align_right_via_xml(self, doc_path, output_path):
-        """
-        FINAL STEP: Apply right alignment to ALL content by directly editing XML.
-        This is the "Select All + Align Right" equivalent.
-        """
-        print(f"  ✓ Applying final right alignment via XML...")
-        
-        temp_dir = doc_path.parent / f"_temp_align_{doc_path.stem}"
-        if temp_dir.exists():
-            shutil.rmtree(temp_dir)
-        temp_dir.mkdir()
 
-        try:
-            # Extract docx
-            with zipfile.ZipFile(output_path, 'r') as zip_ref:
-                zip_ref.extractall(temp_dir)
-
-            # Fix document.xml
-            document_xml_path = temp_dir / 'word' / 'document.xml'
-            if document_xml_path.exists():
-                with open(document_xml_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-
-                # Parse XML
-                root = ET.fromstring(content)
-                w = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
-
-                count = 0
-                # Find ALL paragraphs and set alignment to right
-                for para in root.iter(f'{w}p'):
-                    pPr = para.find(f'{w}pPr')
-                    if pPr is None:
-                        pPr = ET.Element(f'{w}pPr')
-                        para.insert(0, pPr)
-
-                    # Remove existing alignment
-                    jc = pPr.find(f'{w}jc')
-                    if jc is not None:
-                        pPr.remove(jc)
-                    
-                    # Add right alignment
-                    jc = ET.SubElement(pPr, f'{w}jc')
-                    jc.set(f'{w}val', 'right')
-                    count += 1
-
-                # Save
-                with open(document_xml_path, 'w', encoding='utf-8') as f:
-                    f.write(ET.tostring(root, encoding='unicode'))
-
-                print(f"    → Aligned {count} paragraphs to the right")
-
-            # Repack
-            if output_path.exists():
-                output_path.unlink()
-                
-            with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for root_dir, dirs, files in os.walk(temp_dir):
-                    for file in files:
-                        file_path = Path(root_dir) / file
-                        arcname = file_path.relative_to(temp_dir)
-                        zipf.write(file_path, arcname)
-
-            return count
-
-        finally:
-            if temp_dir.exists():
-                shutil.rmtree(temp_dir)
 
     def fix_odf_document(self, doc_path):
         """Fix a single ODF document (.odt)"""
@@ -417,12 +351,8 @@ class ArabicDocxFixer:
             if self.dry_run:
                 print(f"  [DRY RUN] Would save to: {output_path.name}")
             else:
-                # First save with python-docx
+                # Save the document using python-docx
                 doc.save(output_path)
-                
-                # FINAL STEP: Apply right alignment to everything via XML
-                self.align_right_via_xml(doc_path, output_path)
-                
                 print(f"✓ Fixed and saved to: {output_path.name}")
 
             print(f"  - RTL paragraphs: {doc_fixes['rtl_paragraphs']}")
